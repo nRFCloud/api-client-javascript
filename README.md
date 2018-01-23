@@ -9,6 +9,8 @@
 
 Provides the JavaScript API client for the [nRFCloud.com REST API](https://github.com/nRFCloud/api).
 
+> :warning: **This is a preview release and might be changed without notice.**
+
 ## API Client
 
 The API client is available on npm:
