@@ -2,7 +2,7 @@ language: node_js
 node_js: '8'
 cache:
   directories:
-    - node_modules
+  - ~/.npm
 notifications:
   email: false
 before_install:
@@ -16,7 +16,7 @@ script:
   - npm run lint
   - make dist
 after_success:
-  - npm run semantic-release
+  - npm run travis-deploy-once "npm run semantic-release"
 branches:
   except:
     - /^v\d+\.\d+\.\d+$/
