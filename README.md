@@ -36,7 +36,7 @@ client
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 
-const {Client} = require('./')
+const {Client} = require('@nrfcloud/api-client-javascript')
 
 ...
 ```
