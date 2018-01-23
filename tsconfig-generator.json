@@ -3,14 +3,12 @@
     "module": "commonjs",
     "target": "ES6",
     "strict": true,
-    "outDir": "dist/",
-    "declaration": true,
+    "outDir": "generator/",
     "lib": [
-      "es7",
-      "dom"
+      "es7"
     ]
   },
   "include": [
-    "ts/**/*"
+    "src/**/*"
   ]
 }
