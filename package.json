@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nRFCloud/api.git"
+    "url": "https://github.com/nRFCloud/api-client-javascript.git"
   },
   "keywords": [
     "nRFCloud",
@@ -23,9 +23,9 @@
   "author": "Nordic Semiconductor ASA | nordicsemi.no",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/nRFCloud/api/issues"
+    "url": "https://github.com/nRFCloud/api-client-javascript/issues"
   },
-  "homepage": "https://github.com/nRFCloud/api#readme",
+  "homepage": "https://github.com/nRFCloud/api-client-javascript#readme",
   "devDependencies": {
     "@commitlint/cli": "^6.0.2",
     "@commitlint/config-angular": "^6.0.2",
