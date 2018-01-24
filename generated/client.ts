@@ -27,9 +27,9 @@ export class Client {
             method,
             headers: {
                 ...headers,
-                Authorization: this.token,
-                "X-API-Version": Client.apiVersion,
-                "X-API-Client": "@nrfcloud/api-client-javascript"
+                Authorization: `Bearer ${this.token}`,
+                "X-nRFCloud-API-Version": Client.apiVersion,
+                "X-nRFCloud-API-Client": "@nrfcloud/api-client-javascript"
             },
             body: body ? JSON.stringify(body) : undefined
         });

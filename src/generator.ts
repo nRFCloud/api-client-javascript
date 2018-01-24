@@ -480,20 +480,28 @@ export class ClientGenerator {
                                 ts.createSpreadAssignment(ts.createIdentifier('headers')),
                                 ts.createPropertyAssignment(
                                   'Authorization',
-                                  ts.createPropertyAccess(
-                                    ts.createThis(),
-                                    ts.createIdentifier('token'),
+                                  ts.createTemplateExpression(
+                                    ts.createTemplateHead('Bearer '),
+                                    [
+                                      ts.createTemplateSpan(
+                                        ts.createPropertyAccess(
+                                          ts.createThis(),
+                                          ts.createIdentifier('token'),
+                                        ),
+                                        ts.createTemplateTail(''),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 ts.createPropertyAssignment(
-                                  ts.createLiteral('X-API-Version'),
+                                  ts.createLiteral('X-nRFCloud-API-Version'),
                                   ts.createPropertyAccess(
                                     ts.createIdentifier('Client'),
                                     ts.createIdentifier('apiVersion'),
                                   ),
                                 ),
                                 ts.createPropertyAssignment(
-                                  ts.createLiteral('X-API-Client'),
+                                  ts.createLiteral('X-nRFCloud-API-Client'),
                                   ts.createLiteral(this.packageJson.name),
                                 ),
                               ],
