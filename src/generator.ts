@@ -191,6 +191,7 @@ export class ClientGenerator {
       `${Object.keys(responses).map((statusCode: string) => ` * - for status ${statusCode} a ${Object.keys(responses[statusCode].content).map(contentType => `${responses[statusCode].content[contentType].schema.$ref.replace('#/components/schemas/', '')}`)} (${responses[statusCode].description})\n`).join('')}` +
       ' * \n' +
       `${parameters.map(({name, required, in: location, schema: {type}}) => ` * @param {${type}} ${name}${required ? ' required' : ''} ${location} parameter\n`)}` +
+      ' * @throws {HttpProblem} if the request fails\n' +
       ' ', true);
 
     return method;

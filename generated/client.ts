@@ -37,6 +37,7 @@ export class Client {
      * - for status 500 a HttpProblem (An internal error occurred. Check the response body for details.)
      *
      * @param {string} tenantId required path parameter
+     * @throws {HttpProblem} if the request fails
      */
     async registerGateway(tenantId: string): Promise<GatewayRegistrationResult> {
         let path: string = "tenants/{tenantId}/gateways";
