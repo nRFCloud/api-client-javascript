@@ -1,5 +1,7 @@
+import { TenantsList } from "./types/TenantsList";
 import { GatewayRegistrationResult } from "./types/GatewayRegistrationResult";
 import { HttpProblem, ApplicationError } from "@nrfcloud/models";
+import { toQueryString } from "../src/util/to-query-string";
 /**
  * API Client for the nRF Cloud REST API
  *
@@ -20,10 +22,12 @@ export class Client {
         this.token = token;
         this.endpoint = endpoint;
     }
-    private async request(method: string, path: string, body?: any, headers: {
+    private async request(method: string, path: string, queryString: {
+            [index: string]: string | undefined;
+        } = {}, body?: any, headers: {
             [index: string]: string;
         } = { "Accept": "application/json" }): Promise<any> {
-        const res: Response = await fetch(`${this.endpoint}/${path}`, {
+        const res: Response = await fetch(`${this.endpoint}/${path}${toQueryString(queryString)}`, {
             method,
             headers: {
                 ...headers,
@@ -47,6 +51,35 @@ export class Client {
         return json;
     }
     /**
+     * Fetch user's tenant
+     *
+     * Returns the tenants for a user (and creating them if they do not exist)
+     * Sends a POST request to /tenants
+     *
+     * Returns:
+     * - for status 200
+     *   a TenantsList as application/json
+     *   (The tenants for the authenticated user)
+     * - for status 400
+     *   a HttpProblem as application/json
+     *   (The supplied request data was invalid. Check the response body for details.)
+     * - for status 404
+     *   a HttpProblem as application/json
+     *   (An entity was not found. Check the response body for details.)
+     * - for status 500
+     *   a HttpProblem as application/json
+     *   (An internal error occurred. Check the response body for details.)
+     *
+     * @param {string} create (query parameter) Set this parameter to `true` to create a new tenant if no tenant exists for the authenticated user
+     * @throws {TypeError} if the response could not be parsed
+     * @throws {HttpProblem} if the backend returned an error
+     * @throws {ApplicationError} if the response was an error, but not a HttpProblem
+     */
+    async listTenants(create?: string): Promise<TenantsList> {
+        let path: string = "tenants";
+        return this.request("POST", path, { create }, undefined, { Accept: "application/json" });
+    }
+    /**
      * Register new Gateway
      *
      * Registers a new Gateway and returns the certificate
@@ -55,7 +88,7 @@ export class Client {
      * Returns:
      * - for status 201
      *   a GatewayRegistrationResult as application/json
-     *   (The certificate for the newly create gateway)
+     *   (The certificate for the newly created gateway)
      * - for status 400
      *   a HttpProblem as application/json
      *   (The supplied request data was invalid. Check the response body for details.)
@@ -66,7 +99,7 @@ export class Client {
      *   a HttpProblem as application/json
      *   (An internal error occurred. Check the response body for details.)
      *
-     * @param {string} tenantId required path parameter
+     * @param {string} tenantId required (path parameter) Id of the tenant to register the gateway for
      * @throws {TypeError} if the response could not be parsed
      * @throws {HttpProblem} if the backend returned an error
      * @throws {ApplicationError} if the response was an error, but not a HttpProblem
@@ -74,6 +107,6 @@ export class Client {
     async registerGateway(tenantId: string): Promise<GatewayRegistrationResult> {
         let path: string = "tenants/{tenantId}/gateways";
         path = path.replace("{tenantId}", tenantId);
-        return this.request("POST", path, undefined, { Accept: "application/json" });
+        return this.request("POST", path, {}, undefined, { Accept: "application/json" });
     }
 }

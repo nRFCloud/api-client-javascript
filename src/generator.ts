@@ -6,6 +6,7 @@ type JSONSchema = {
 }
 type ApiParameter = {
   name: string,
+  description?: string,
   required: boolean,
   in: string,
   schema: JSONSchema
@@ -87,18 +88,33 @@ export class ClientGenerator {
       ts.createLiteral(
         models.includes(model) ? '@nrfcloud/models' : `./types/${model}`),
     ));
-    imports.push(ts.createImportDeclaration(
-      undefined,
-      undefined,
-      ts.createImportClause(
+    imports.push(
+      ts.createImportDeclaration(
         undefined,
-        ts.createNamedImports([
-          ts.createImportSpecifier(undefined, ts.createIdentifier('HttpProblem')),
-          ts.createImportSpecifier(undefined, ts.createIdentifier('ApplicationError')),
-        ]),
+        undefined,
+        ts.createImportClause(
+          undefined,
+          ts.createNamedImports([
+            ts.createImportSpecifier(undefined, ts.createIdentifier('HttpProblem')),
+            ts.createImportSpecifier(undefined, ts.createIdentifier('ApplicationError')),
+          ]),
+        ),
+        ts.createLiteral('@nrfcloud/models'),
       ),
-      ts.createLiteral('@nrfcloud/models'),
-    ));
+    );
+    imports.push(
+      ts.createImportDeclaration(
+        undefined,
+        undefined,
+        ts.createImportClause(
+          undefined,
+          ts.createNamedImports([
+            ts.createImportSpecifier(undefined, ts.createIdentifier('toQueryString')),
+          ]),
+        ),
+        ts.createLiteral('../src/util/to-query-string'),
+      ),
+    );
 
     const clientFile = ts.createSourceFile('client.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
     const printer = ts.createPrinter({
@@ -154,7 +170,7 @@ export class ClientGenerator {
         ),
         this.createConstructor(),
         this.createRequest(),
-        ...this.createMethods(),
+        ...this.createClientMethods(),
       ],
     );
 
@@ -172,7 +188,7 @@ export class ClientGenerator {
     ];
   }
 
-  private createMethods(): ts.MethodDeclaration[] {
+  private createClientMethods(): ts.MethodDeclaration[] {
     const methods: ts.MethodDeclaration[] = [];
     Object.keys(this.api.paths)
       .forEach(path => Object.keys(this.api.paths[path])
@@ -216,7 +232,7 @@ export class ClientGenerator {
             .map(contentType => `${responses[statusCode].content[contentType].schema.$ref.replace('#/components/schemas/', '')} as ${contentType}`)}\n` +
           ` *   (${responses[statusCode].description})\n`).join('')}` +
       ' * \n' +
-      `${parameters.map(({name, required, in: location, schema: {type}}) => ` * @param {${type}} ${name}${required ? ' required' : ''} ${location} parameter\n`)}` +
+      `${parameters.map(({name, description, required, in: location, schema: {type}}) => ` * @param {${type}} ${name}${required ? ' required' : ''} (${location} parameter)${description ? ` ${description}` : ''}\n`)}` +
       ' * @throws {TypeError} if the response could not be parsed\n' +
       ' * @throws {HttpProblem} if the backend returned an error\n' +
       ' * @throws {ApplicationError} if the response was an error, but not a HttpProblem\n' +
@@ -275,6 +291,11 @@ export class ClientGenerator {
             [
               ts.createLiteral(method.toUpperCase()),
               ts.createIdentifier('path'),
+              ts.createObjectLiteral(
+                parameters
+                  .filter(({in: location}) => location === 'query')
+                  .map(({name}) => ts.createShorthandPropertyAssignment(name)),
+              ),
               ts.createIdentifier('undefined'),
               ts.createObjectLiteral(
                 [
@@ -296,30 +317,37 @@ export class ClientGenerator {
   private createClientMethodParameters(parameters: ApiParameter[]): ts.ParameterDeclaration[] {
     return [
       // Required parameters first
-      ...parameters.filter(({required}) => required).map(({name, schema}) => ts.createParameter(
+      ...parameters.filter(({required}) => required).map(parameter => ts.createParameter(
         undefined,
         undefined,
         undefined,
-        name,
+        parameter.name,
         undefined,
-        this.createTypeFromJsonSchema(schema),
+        this.createTypeFromJsonSchema(parameter),
       )),
       // Optional parameters
-      ...parameters.filter(({required}) => !required).map(({name, schema}) => ts.createParameter(
+      ...parameters.filter(({required}) => !required).map(parameter => ts.createParameter(
         undefined,
         undefined,
         undefined,
-        name,
+        parameter.name,
         ts.createToken(ts.SyntaxKind.QuestionToken),
-        this.createTypeFromJsonSchema(schema),
+        this.createTypeFromJsonSchema(parameter),
       )),
     ];
   }
 
-  private createTypeFromJsonSchema(schema: JSONSchema): ts.KeywordTypeNode | undefined {
-    switch (schema.type) {
+  private createTypeFromJsonSchema(parameter: ApiParameter): ts.KeywordTypeNode | undefined {
+    switch (parameter.schema.type) {
       case 'string':
         return ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword);
+      case 'boolean':
+        if (parameter.in === 'query') {
+          throw new Error(`Query parameters must be string! ${JSON.stringify(parameter)}`);
+        }
+        return ts.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword);
+      default:
+        throw new Error(`Unsupported schema type: ${parameter.schema.type}!`);
     }
   }
 
@@ -411,6 +439,15 @@ export class ClientGenerator {
           undefined,
           undefined,
           undefined,
+          'queryString',
+          undefined,
+          createStringMapType(true),
+          ts.createObjectLiteral(),
+        ),
+        ts.createParameter(
+          undefined,
+          undefined,
+          undefined,
           'body',
           ts.createToken(ts.SyntaxKind.QuestionToken),
           ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
@@ -421,15 +458,7 @@ export class ClientGenerator {
           undefined,
           'headers',
           undefined,
-          ts.createTypeLiteralNode([
-            ts.createPropertySignature(
-              undefined,
-              ts.createIdentifier('[index: string]'), // This does not seem the correct way
-              undefined,
-              ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-              undefined,
-            ),
-          ]),
+          createStringMapType(),
           ts.createObjectLiteral(
             [
               ts.createPropertyAssignment(
@@ -468,6 +497,16 @@ export class ClientGenerator {
                             ),
                             ts.createTemplateSpan(
                               ts.createIdentifier('path'),
+                              ts.createTemplateMiddle(''),
+                            ),
+                            ts.createTemplateSpan(
+                              ts.createCall(
+                                ts.createIdentifier('toQueryString'),
+                                undefined,
+                                [
+                                  ts.createIdentifier('queryString'),
+                                ],
+                              ),
                               ts.createTemplateTail(''),
                             ),
                           ],
@@ -694,9 +733,8 @@ export class ClientGenerator {
                     ts.createIdentifier('toString'),
                   ),
                   undefined,
-                  [
-                  ]
-                )
+                  [],
+                ),
               ),
               ts.createThrow(
                 ts.createCall(
@@ -722,13 +760,13 @@ export class ClientGenerator {
                       ),
                       undefined,
                       [
-                        ts.createIdentifier('json')
-                      ]
-                    )
+                        ts.createIdentifier('json'),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            )
+            ),
           ),
           ts.createReturn(ts.createIdentifier('json')),
         ],
@@ -745,3 +783,16 @@ function* getAcceptTypes(responses: ApiResponses): IterableIterator<string> {
     }
   }
 }
+
+const createStringMapType = (allowUndefined: boolean = false) => ts.createTypeLiteralNode([
+  ts.createPropertySignature(
+    undefined,
+    ts.createIdentifier('[index: string]'), // This does not seem the correct way
+    undefined,
+    allowUndefined ? ts.createUnionTypeNode([
+      ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+      ts.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword),
+    ]) : ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+    undefined,
+  ),
+]);
