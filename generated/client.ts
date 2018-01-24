@@ -31,7 +31,7 @@ export class Client {
      * Sends a POST request to /tenants/{tenantId}/gateways
      *
      * Returns:
-     * - for status 200 a GatewayRegistrationResult (The certificate for the newly create gateway)
+     * - for status 201 a GatewayRegistrationResult (The certificate for the newly create gateway)
      * - for status 400 a HttpProblem (The supplied request data was invalid. Check the response body for details.)
      * - for status 403 a HttpProblem (Access was denied. Check the response body for details.)
      * - for status 500 a HttpProblem (An internal error occurred. Check the response body for details.)
