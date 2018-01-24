@@ -36,10 +36,12 @@ type ApiResponses = {
 
 export class ClientGenerator {
   private api: any;
+  private packageJson: any;
   private returnTypes: string[];
 
-  constructor(api: any) {
+  constructor(api: any, packageJson: any) {
     this.api = api;
+    this.packageJson = packageJson;
 
     const returnTypes: string[] = [];
     Object.keys(this.api.paths)
@@ -71,11 +73,6 @@ export class ClientGenerator {
   generate(): string {
     const client = this.createClient();
 
-    const clientFile = ts.createSourceFile('client.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-    const printer = ts.createPrinter({
-      newLine: ts.NewLineKind.LineFeed,
-    });
-
     const models = schemas.map(({title}) => title);
 
     const imports = this.returnTypes.map(model => ts.createImportDeclaration(
@@ -102,6 +99,11 @@ export class ClientGenerator {
       ts.createLiteral('@nrfcloud/models'),
     ));
 
+    const clientFile = ts.createSourceFile('client.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+    const printer = ts.createPrinter({
+      newLine: ts.NewLineKind.LineFeed,
+    });
+
     return [
       ...imports,
       ...client,
@@ -119,6 +121,16 @@ export class ClientGenerator {
       undefined,
       [],
       [
+        ts.createProperty(
+          undefined,
+          [
+            ts.createToken(ts.SyntaxKind.StaticKeyword),
+          ],
+          'apiVersion',
+          undefined,
+          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+          ts.createLiteral(this.api.info.version)
+        ),
         ts.createProperty(
           undefined,
           [
@@ -144,6 +156,15 @@ export class ClientGenerator {
         ...this.createMethods(),
       ],
     );
+
+    ts.addSyntheticLeadingComment(c, ts.SyntaxKind.MultiLineCommentTrivia, '*\n' +
+      ' * API Client for the nRF Cloud REST API\n' +
+      ' * \n' +
+      ` * This client has been auto-generated for version ${this.api.info.version} of the API definition.\n` +
+      ' * \n' +
+      ` * @see ${this.packageJson.homepage}\n` +
+      ` * @author ${this.packageJson.author}\n` +
+      ' ', true);
 
     return [
       c,
@@ -213,7 +234,7 @@ export class ClientGenerator {
                 ts.createLiteral(path.replace(/^\//, '')),
               ),
             ],
-            ts.NodeFlags.Let
+            ts.NodeFlags.Let,
           ),
         ),
         ...pathParams.map(param => ts.createStatement(
@@ -418,6 +439,17 @@ export class ClientGenerator {
                                     ts.createIdentifier('token'),
                                   ),
                                 ),
+                                ts.createPropertyAssignment(
+                                  ts.createLiteral('X-API-Version'),
+                                  ts.createPropertyAccess(
+                                    ts.createIdentifier('Client'),
+                                    ts.createIdentifier('apiVersion'),
+                                  ),
+                                ),
+                                ts.createPropertyAssignment(
+                                  ts.createLiteral('X-API-Client'),
+                                  ts.createLiteral(this.packageJson.name),
+                                )
                               ],
                               true,
                             )),
@@ -445,7 +477,7 @@ export class ClientGenerator {
                   ),
                 ),
               ],
-              ts.NodeFlags.Const
+              ts.NodeFlags.Const,
             ),
           ),
           ts.createVariableStatement(
@@ -463,10 +495,10 @@ export class ClientGenerator {
                       [],
                     ),
                   ),
-                )
+                ),
               ],
-              ts.NodeFlags.Const
-            )
+              ts.NodeFlags.Const,
+            ),
           ),
           ts.createIf(
             ts.createBinary(

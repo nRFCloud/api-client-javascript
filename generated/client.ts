@@ -1,6 +1,15 @@
 import { GatewayRegistrationResult } from "./types/GatewayRegistrationResult";
 import { HttpProblem } from "@nrfcloud/models";
+/**
+ * API Client for the nRF Cloud REST API
+ *
+ * This client has been auto-generated for version 1.0.0-preview.1 of the API definition.
+ *
+ * @see https://github.com/nRFCloud/api-client-javascript#readme
+ * @author Nordic Semiconductor ASA | nordicsemi.no
+ */
 export class Client {
+    static apiVersion: string = "1.0.0-preview.1";
     private token: string;
     private endpoint: string;
     /**
@@ -15,7 +24,9 @@ export class Client {
         const res: Response = await fetch(`${this.endpoint}/${path}`, {
             method,
             headers: {
-                Authorization: this.token
+                Authorization: this.token,
+                "X-API-Version": Client.apiVersion,
+                "X-API-Client": "@nrfcloud/api-client-javascript"
             },
             body: body ? JSON.stringify(body) : undefined
         });
