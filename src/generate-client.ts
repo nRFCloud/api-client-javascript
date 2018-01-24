@@ -7,4 +7,4 @@ import { promisify } from 'util';
 const writeFile = promisify(writeFileAsync);
 const generator = new ClientGenerator(api);
 
-writeFile('./ts/client.ts', generator.generate(), 'utf-8');
+writeFile(process.argv[process.argv.length - 1], generator.generate(), 'utf-8');

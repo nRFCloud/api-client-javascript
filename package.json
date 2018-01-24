@@ -2,13 +2,13 @@
   "name": "@nrfcloud/api-client-javascript",
   "version": "0.0.0-development",
   "description": "JavaScript API client for the nRFCloud.com REST API",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
+  "main": "generated/js/index.js",
+  "typings": "generated/js/index.d.ts",
   "scripts": {
     "commitmsg": "commitlint -e",
     "semantic-release": "semantic-release",
     "postinstall": "make dist",
-    "lint": "tslint --project ./tsconfig.json -e ts/**/*",
+    "lint": "tslint --project ./tsconfig.json -e generated/ts/**/*",
     "travis-deploy-once": "travis-deploy-once"
   },
   "repository": {
@@ -45,7 +45,7 @@
     "isomorphic-fetch": "^2.2.1"
   },
   "files": [
-    "dist",
+    "generated",
     "README.md"
   ],
   "publishConfig": {

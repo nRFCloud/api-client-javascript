@@ -1,22 +1,25 @@
 .PHONY: clean
 
-dist: ts/types ts/client.ts ts/index.ts
+generated: generated/ts/types generated/ts/client.ts generated/ts/index.ts generated/README.md
 	./node_modules/.bin/tsc
-	mkdir -p dist/types
-	cp ts/types/* dist/types
+	mkdir -p generated/js/types
+	cp generated/ts/types/* generated/js/types
 
-ts/client.ts: generator/generate-client.js node_modules/@nrfcloud/api/docs/api.json
-	node generator/generate-client.js
+generated/ts/client.ts: generator/generate-client.js node_modules/@nrfcloud/api/docs/api.json
+	node generator/generate-client.js $@
 
-ts/index.ts:
+generated/ts/index.ts:
 	echo "export * from './client';" > $@
 
 generator/generate-client.js: src/*.ts
 	./node_modules/.bin/tsc -p tsconfig-generator.json
 
-ts/types : node_modules/@nrfcloud/api/schemas/*.json
+generated/ts/types : node_modules/@nrfcloud/api/schemas/*.json
 	@mkdir -p $@
 	node node_modules/@nrfcloud/models/scripts/generate-base-models-from-schema.js node_modules/@nrfcloud/api/schemas $@
 
+generated/README.md:
+	echo "The files in this folder are auto-generated. Do not edit." > $@
+
 clean:
-	rm -rf dist generator ts
+	rm -rf generator
