@@ -129,7 +129,7 @@ export class ClientGenerator {
           'apiVersion',
           undefined,
           ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-          ts.createLiteral(this.api.info.version)
+          ts.createLiteral(this.api.info.version),
         ),
         ts.createProperty(
           undefined,
@@ -188,6 +188,7 @@ export class ClientGenerator {
     parameters: ApiParameter[],
     responses: ApiResponses
   }): ts.MethodDeclaration {
+
     const method = ts.createMethod(
       undefined,
       /*modifiers*/[ts.createToken(ts.SyntaxKind.AsyncKeyword)],
@@ -199,7 +200,7 @@ export class ClientGenerator {
       ts.createTypeReferenceNode('Promise', [
         ts.createUnionTypeNode(this.getReturnsTypesForPath(responses).map(returnType => ts.createTypeReferenceNode(returnType, undefined))),
       ]),
-      this.createClientMethodBody(path, httpMethod, parameters),
+      this.createClientMethodBody(path, httpMethod, parameters, responses),
     );
 
     ts.addSyntheticLeadingComment(method, ts.SyntaxKind.MultiLineCommentTrivia, '*\n' +
@@ -209,19 +210,28 @@ export class ClientGenerator {
       ` * Sends a ${httpMethod} request to ${path}\n` +
       ' * \n' +
       ' * Returns:\n' +
-      `${Object.keys(responses).map((statusCode: string) => ` * - for status ${statusCode} a ${Object.keys(responses[statusCode].content).map(contentType => `${responses[statusCode].content[contentType].schema.$ref.replace('#/components/schemas/', '')}`)} (${responses[statusCode].description})\n`).join('')}` +
+      `${Object.keys(responses)
+        .map((statusCode: string) => ` * - for status ${statusCode}\n *   a ${Object.keys(responses[statusCode].content)
+            .map(contentType => `${responses[statusCode].content[contentType].schema.$ref.replace('#/components/schemas/', '')} as ${contentType}`)}\n` +
+          ` *   (${responses[statusCode].description})\n`).join('')}` +
       ' * \n' +
       `${parameters.map(({name, required, in: location, schema: {type}}) => ` * @param {${type}} ${name}${required ? ' required' : ''} ${location} parameter\n`)}` +
       ' * @throws {HttpProblem} if the request fails\n' +
+      ' * @throws {TypeError} if the response could not be parsed\n' +
       ' ', true);
 
     return method;
   }
 
 
-  private createClientMethodBody(path: string, method: string, parameters: ApiParameter[]): ts.Block {
+  private createClientMethodBody(path: string, method: string, parameters: ApiParameter[], responses: ApiResponses): ts.Block {
 
     const pathParams = (path.match(/\{[^\}]+\}/g) || []).map(p => p.substr(1, p.length - 2));
+
+    const acceptTypes: { [index: string]: boolean } = {};
+    for (let contentType of getAcceptTypes(responses)) {
+      acceptTypes[contentType] = true;
+    }
 
     return ts.createBlock([
         ts.createVariableStatement(
@@ -263,6 +273,15 @@ export class ClientGenerator {
             [
               ts.createLiteral(method.toUpperCase()),
               ts.createIdentifier('path'),
+              ts.createIdentifier('undefined'),
+              ts.createObjectLiteral(
+                [
+                  ts.createPropertyAssignment(
+                    'Accept',
+                    ts.createLiteral(Object.keys(acceptTypes).join(', ')),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -394,6 +413,30 @@ export class ClientGenerator {
           ts.createToken(ts.SyntaxKind.QuestionToken),
           ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
         ),
+        ts.createParameter(
+          undefined,
+          undefined,
+          undefined,
+          'headers',
+          undefined,
+          ts.createTypeLiteralNode([
+            ts.createPropertySignature(
+              undefined,
+              ts.createIdentifier('[index: string]'), // This does not seem the correct way
+              undefined,
+              ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+              undefined,
+            ),
+          ]),
+          ts.createObjectLiteral(
+            [
+              ts.createPropertyAssignment(
+                ts.createLiteral('Accept'),
+                ts.createLiteral('application/json'),
+              ),
+            ],
+          ),
+        ),
       ],
       ts.createTypeReferenceNode('Promise', [
         ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
@@ -432,6 +475,7 @@ export class ClientGenerator {
                             ts.createShorthandPropertyAssignment('method'),
                             ts.createPropertyAssignment('headers', ts.createObjectLiteral(
                               [
+                                ts.createSpreadAssignment(ts.createIdentifier('headers')),
                                 ts.createPropertyAssignment(
                                   'Authorization',
                                   ts.createPropertyAccess(
@@ -449,7 +493,7 @@ export class ClientGenerator {
                                 ts.createPropertyAssignment(
                                   ts.createLiteral('X-API-Client'),
                                   ts.createLiteral(this.packageJson.name),
-                                )
+                                ),
                               ],
                               true,
                             )),
@@ -471,7 +515,8 @@ export class ClientGenerator {
                               ),
                             ),
                           ],
-                          true),
+                          true,
+                        ),
                       ],
                     ),
                   ),
@@ -480,6 +525,121 @@ export class ClientGenerator {
               ts.NodeFlags.Const,
             ),
           ),
+          // Check if we have json
+          ts.createVariableStatement(
+            [],
+            ts.createVariableDeclarationList(
+              [
+                ts.createVariableDeclaration('contentType', ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                  ts.createLogicalOr(
+                    ts.createCall(
+                      ts.createPropertyAccess(
+                        ts.createIdentifier('res.headers'),
+                        ts.createIdentifier('get'),
+                      ),
+                      undefined,
+                      [
+                        ts.createLiteral('content-type'),
+                      ],
+                    ),
+                    ts.createLiteral(''),
+                  ),
+                ),
+                ts.createVariableDeclaration('mediaType', ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+                  ts.createElementAccess(
+                    ts.createCall(
+                      ts.createPropertyAccess(
+                        ts.createIdentifier('contentType'),
+                        ts.createIdentifier('split'),
+                      ),
+                      undefined,
+                      [
+                        ts.createLiteral(';'),
+                      ],
+                    ),
+                    0,
+                  ),
+                ),
+              ],
+              ts.NodeFlags.Const,
+            ),
+          ),
+          // Throw if content type does not match accept
+          ts.createIf(
+            ts.createBinary(
+              ts.createCall(
+                ts.createPropertyAccess(
+                  ts.createIdentifier('headers.Accept'),
+                  ts.createIdentifier('indexOf'),
+                ),
+                undefined,
+                [
+                  ts.createIdentifier('mediaType'),
+                ],
+              ),
+              ts.SyntaxKind.LessThanToken,
+              ts.createLiteral(0),
+            ),
+            ts.createThrow(
+              ts.createNew(
+                ts.createIdentifier('TypeError'),
+                undefined,
+                [
+                  ts.createTemplateExpression(
+                    ts.createTemplateHead('The content-type "'),
+                    [
+                      ts.createTemplateSpan(
+                        ts.createIdentifier('contentType'),
+                        ts.createTemplateMiddle('" of the response does not match accepted media-type '),
+                      ),
+                      ts.createTemplateSpan(
+                        ts.createPropertyAccess(
+                          ts.createIdentifier('headers'),
+                          ts.createIdentifier('Accept'),
+                        ),
+                        ts.createTemplateTail(''),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Response is JSON?
+          ts.createIf(
+            ts.createBinary(
+              ts.createCall(
+                ts.createPropertyAccess(
+                  ts.createIdentifier('/^application\\/([^ \\/]+\\+)?json$/'),
+                  ts.createIdentifier('test'),
+                ),
+                undefined,
+                [
+                  ts.createIdentifier('mediaType'),
+                ],
+              ),
+              ts.SyntaxKind.EqualsEqualsEqualsToken,
+              ts.createFalse(),
+            ),
+            ts.createThrow(
+              ts.createNew(
+                ts.createIdentifier('TypeError'),
+                undefined,
+                [
+                  ts.createTemplateExpression(
+                    ts.createTemplateHead('The content-type "'),
+                    [
+                      ts.createTemplateSpan(
+                        ts.createIdentifier('contentType'),
+                        ts.createTemplateTail('" of the response is not JSON!'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // res.json()
           ts.createVariableStatement(
             [],
             ts.createVariableDeclarationList(
@@ -500,6 +660,7 @@ export class ClientGenerator {
               ts.NodeFlags.Const,
             ),
           ),
+          // Throw as HttpProblem if statusCode >= 400, backend is expected to return this
           ts.createIf(
             ts.createBinary(
               ts.createPropertyAccess(
@@ -527,5 +688,13 @@ export class ClientGenerator {
         true,
       ),
     );
+  }
+}
+
+function* getAcceptTypes(responses: ApiResponses): IterableIterator<string> {
+  for (let statusCode of Object.keys(responses)) {
+    for (let contentType of Object.keys(responses[statusCode].content)) {
+      yield contentType;
+    }
   }
 }

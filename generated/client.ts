@@ -20,16 +20,24 @@ export class Client {
         this.token = token;
         this.endpoint = endpoint;
     }
-    private async request(method: string, path: string, body?: any): Promise<any> {
+    private async request(method: string, path: string, body?: any, headers: {
+            [index: string]: string;
+        } = { "Accept": "application/json" }): Promise<any> {
         const res: Response = await fetch(`${this.endpoint}/${path}`, {
             method,
             headers: {
+                ...headers,
                 Authorization: this.token,
                 "X-API-Version": Client.apiVersion,
                 "X-API-Client": "@nrfcloud/api-client-javascript"
             },
             body: body ? JSON.stringify(body) : undefined
         });
+        const contentType: string = res.headers.get("content-type") || "", mediaType: string = contentType.split(";")[0];
+        if (headers.Accept.indexOf(mediaType) < 0)
+            throw new TypeError(`The content-type "${contentType}" of the response does not match accepted media-type ${headers.Accept}`);
+        if (/^application\/([^ \/]+\+)?json$/.test(mediaType) === false)
+            throw new TypeError(`The content-type "${contentType}" of the response is not JSON!`);
         const json: any = await res.json();
         if (res.status >= 400)
             throw HttpProblem.fromJSON(json);
@@ -42,17 +50,26 @@ export class Client {
      * Sends a POST request to /tenants/{tenantId}/gateways
      *
      * Returns:
-     * - for status 201 a GatewayRegistrationResult (The certificate for the newly create gateway)
-     * - for status 400 a HttpProblem (The supplied request data was invalid. Check the response body for details.)
-     * - for status 403 a HttpProblem (Access was denied. Check the response body for details.)
-     * - for status 500 a HttpProblem (An internal error occurred. Check the response body for details.)
+     * - for status 201
+     *   a GatewayRegistrationResult as application/json
+     *   (The certificate for the newly create gateway)
+     * - for status 400
+     *   a HttpProblem as application/json
+     *   (The supplied request data was invalid. Check the response body for details.)
+     * - for status 403
+     *   a HttpProblem as application/json
+     *   (Access was denied. Check the response body for details.)
+     * - for status 500
+     *   a HttpProblem as application/json
+     *   (An internal error occurred. Check the response body for details.)
      *
      * @param {string} tenantId required path parameter
      * @throws {HttpProblem} if the request fails
+     * @throws {TypeError} if the response could not be parsed
      */
     async registerGateway(tenantId: string): Promise<GatewayRegistrationResult> {
         let path: string = "tenants/{tenantId}/gateways";
         path = path.replace("{tenantId}", tenantId);
-        return this.request("POST", path);
+        return this.request("POST", path, undefined, { Accept: "application/json" });
     }
 }
