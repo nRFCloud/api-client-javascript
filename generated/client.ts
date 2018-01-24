@@ -1,5 +1,5 @@
 import { GatewayRegistrationResult } from "./types/GatewayRegistrationResult";
-import { HttpProblem } from "@nrfcloud/models";
+import { HttpProblem, ApplicationError } from "@nrfcloud/models";
 /**
  * API Client for the nRF Cloud REST API
  *
@@ -40,7 +40,10 @@ export class Client {
             throw new TypeError(`The content-type "${contentType}" of the response is not JSON!`);
         const json: any = await res.json();
         if (res.status >= 400)
-            throw HttpProblem.fromJSON(json);
+            if (json.$context === HttpProblem.$context.toString())
+                throw HttpProblem.fromJSON(json);
+            else
+                throw new ApplicationError(JSON.stringify(json));
         return json;
     }
     /**
@@ -64,8 +67,9 @@ export class Client {
      *   (An internal error occurred. Check the response body for details.)
      *
      * @param {string} tenantId required path parameter
-     * @throws {HttpProblem} if the request fails
      * @throws {TypeError} if the response could not be parsed
+     * @throws {HttpProblem} if the backend returned an error
+     * @throws {ApplicationError} if the response was an error, but not a HttpProblem
      */
     async registerGateway(tenantId: string): Promise<GatewayRegistrationResult> {
         let path: string = "tenants/{tenantId}/gateways";

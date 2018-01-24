@@ -94,6 +94,7 @@ export class ClientGenerator {
         undefined,
         ts.createNamedImports([
           ts.createImportSpecifier(undefined, ts.createIdentifier('HttpProblem')),
+          ts.createImportSpecifier(undefined, ts.createIdentifier('ApplicationError')),
         ]),
       ),
       ts.createLiteral('@nrfcloud/models'),
@@ -216,8 +217,9 @@ export class ClientGenerator {
           ` *   (${responses[statusCode].description})\n`).join('')}` +
       ' * \n' +
       `${parameters.map(({name, required, in: location, schema: {type}}) => ` * @param {${type}} ${name}${required ? ' required' : ''} ${location} parameter\n`)}` +
-      ' * @throws {HttpProblem} if the request fails\n' +
       ' * @throws {TypeError} if the response could not be parsed\n' +
+      ' * @throws {HttpProblem} if the backend returned an error\n' +
+      ' * @throws {ApplicationError} if the response was an error, but not a HttpProblem\n' +
       ' ', true);
 
     return method;
@@ -670,18 +672,55 @@ export class ClientGenerator {
               ts.SyntaxKind.GreaterThanEqualsToken,
               ts.createLiteral(400),
             ),
-            ts.createThrow(
-              ts.createCall(
+            // Response is HttpProblem?
+            ts.createIf(
+              ts.createBinary(
                 ts.createPropertyAccess(
-                  ts.createIdentifier('HttpProblem'),
-                  ts.createIdentifier('fromJSON'),
-                ),
-                undefined,
-                [
                   ts.createIdentifier('json'),
-                ],
+                  ts.createIdentifier('$context'),
+                ),
+                ts.SyntaxKind.EqualsEqualsEqualsToken,
+                ts.createCall(
+                  ts.createPropertyAccess(
+                    ts.createIdentifier('HttpProblem.$context'),
+                    ts.createIdentifier('toString'),
+                  ),
+                  undefined,
+                  [
+                  ]
+                )
               ),
-            ),
+              ts.createThrow(
+                ts.createCall(
+                  ts.createPropertyAccess(
+                    ts.createIdentifier('HttpProblem'),
+                    ts.createIdentifier('fromJSON'),
+                  ),
+                  undefined,
+                  [
+                    ts.createIdentifier('json'),
+                  ],
+                ),
+              ),
+              ts.createThrow(
+                ts.createNew(
+                  ts.createIdentifier('ApplicationError'),
+                  undefined,
+                  [
+                    ts.createCall(
+                      ts.createPropertyAccess(
+                        ts.createIdentifier('JSON'),
+                        ts.createIdentifier('stringify'),
+                      ),
+                      undefined,
+                      [
+                        ts.createIdentifier('json')
+                      ]
+                    )
+                  ],
+                ),
+              ),
+            )
           ),
           ts.createReturn(ts.createIdentifier('json')),
         ],
