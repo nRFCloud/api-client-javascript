@@ -5,6 +5,8 @@
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "scripts": {
+    "test": "jest",
+    "test:coverage": "npm run test -- --coverage && codeclimate-test-reporter < ./coverage/lcov.info",
     "commitmsg": "commitlint -e",
     "semantic-release": "semantic-release",
     "postinstall": "make dist",
@@ -32,10 +34,14 @@
     "@nrfcloud/api": "git+https://github.com/nRFCloud/api.git#v1.0.0-preview.1",
     "@nrfcloud/models": "^2.1.2",
     "@nrfcloud/tslint-config": "^1.2.1",
+    "@types/jest": "^22.1.0",
+    "codeclimate-test-reporter": "^0.5.0",
     "husky": "^0.14.3",
+    "jest": "^22.1.4",
     "json-schema-to-typescript": "^5.3.2",
     "semantic-release": "^12.2.4",
     "travis-deploy-once": "^4.3.2",
+    "ts-jest": "^22.0.1",
     "tslint": "^5.9.1",
     "typescript": "^2.6.2"
   },
@@ -52,5 +58,22 @@
     "access": "public",
     "tag": "preview"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "json"
+    ],
+    "transform": {
+      "^.+\\.tsx?$": "<rootDir>/node_modules/ts-jest/preprocessor.js"
+    },
+    "testRegex": "(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$",
+    "coverageReporters": [
+      "html",
+      "lcov"
+    ],
+    "mapCoverage": true
+  }
 }

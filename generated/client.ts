@@ -1,7 +1,6 @@
 import { TenantsList } from "./types/TenantsList";
 import { GatewayRegistrationResult } from "./types/GatewayRegistrationResult";
 import { HttpProblem, ApplicationError } from "@nrfcloud/models";
-import { toQueryString } from "../src/util/to-query-string";
 /**
  * API Client for the nRF Cloud REST API
  *
@@ -12,8 +11,8 @@ import { toQueryString } from "../src/util/to-query-string";
  */
 export class Client {
     static apiVersion: string = "1.0.0-preview.1";
-    private token: string;
-    private endpoint: string;
+    protected token: string;
+    protected endpoint: string;
     /**
      * @param {string} token AWS Cognito Identity token
      * @param {string} endpoint API endpoint
@@ -22,20 +21,11 @@ export class Client {
         this.token = token;
         this.endpoint = endpoint;
     }
-    private async request(method: string, path: string, queryString: {
-            [index: string]: string | undefined;
-        } = {}, body?: any, headers: {
-            [index: string]: string;
-        } = { "Accept": "application/json" }): Promise<any> {
-        const res: Response = await fetch(`${this.endpoint}/${path}${toQueryString(queryString)}`, {
-            method,
-            headers: {
-                ...headers,
-                Authorization: `Bearer ${this.token}`,
-                "X-nRFCloud-API-Version": Client.apiVersion,
-                "X-nRFCloud-API-Client": "@nrfcloud/api-client-javascript"
-            },
-            body: body ? JSON.stringify(body) : undefined
+    protected async request(method: string, path: string, queryString: QueryString = {}, body?: any, headers: Headers = { "Accept": "application/json" }): Promise<any> {
+        const res: Response = await fetch(`${this.endpoint.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}${toQueryString(queryString)}`, {
+            method, headers: {
+                ...headers, Authorization: `Bearer ${this.token}`, "X-nRFCloud-API-Version": Client.apiVersion, "X-nRFCloud-API-Client": "@nrfcloud/api-client-javascript",
+            }, body: body ? JSON.stringify(body) : undefined,
         });
         const contentType: string = res.headers.get("content-type") || "", mediaType: string = contentType.split(";")[0];
         if (headers.Accept.indexOf(mediaType) < 0)
@@ -110,3 +100,18 @@ export class Client {
         return this.request("POST", path, {}, undefined, { Accept: "application/json" });
     }
 }
+export type QueryString = {
+    [index: string]: string | undefined;
+};
+export type Headers = {
+    [index: string]: string;
+};
+export const toQueryString = (obj: {
+        [index: string]: string | undefined;
+    }): string => Object.keys(obj).filter(key => obj[key]).reduce((queryString, key, i) => {
+    let delimiter, value;
+    delimiter = (i === 0) ? "?" : "&";
+    key = encodeURIComponent(key);
+    value = encodeURIComponent(`${obj[key]}`);
+    return [queryString, delimiter, key, "=", value].join("");
+}, "");

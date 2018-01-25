@@ -36,11 +36,13 @@ type ApiResponses = {
 }
 
 export class ClientGenerator {
+  private skeletonSource: string;
   private api: any;
   private packageJson: any;
   private returnTypes: string[];
 
-  constructor(api: any, packageJson: any) {
+  constructor(skeletonSource: string, api: any, packageJson: any) {
+    this.skeletonSource = skeletonSource;
     this.api = api;
     this.packageJson = packageJson;
 
@@ -72,7 +74,13 @@ export class ClientGenerator {
   }
 
   generate(): string {
-    const client = this.createClient();
+    const skeleton = ts.createSourceFile('skeleton.ts', this.skeletonSource, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+    const root: ts.Node = skeleton.getChildAt(0);
+    const skeletonClient: ts.Node | undefined = root.getChildren().find(node => ts.isClassDeclaration(node));
+    if (!skeletonClient) {
+      throw new Error('No class declaration found!');
+    }
+    const client = this.updateClient(<ts.ClassDeclaration>skeletonClient);
 
     const models = schemas.map(({title}) => title);
 
@@ -102,79 +110,57 @@ export class ClientGenerator {
         ts.createLiteral('@nrfcloud/models'),
       ),
     );
-    imports.push(
-      ts.createImportDeclaration(
-        undefined,
-        undefined,
-        ts.createImportClause(
-          undefined,
-          ts.createNamedImports([
-            ts.createImportSpecifier(undefined, ts.createIdentifier('toQueryString')),
-          ]),
-        ),
-        ts.createLiteral('../src/util/to-query-string'),
-      ),
-    );
 
-    const clientFile = ts.createSourceFile('client.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+    const blank = ts.createSourceFile('blank.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
     const printer = ts.createPrinter({
       newLine: ts.NewLineKind.LineFeed,
     });
-
     return [
       ...imports,
-      ...client,
+      client,
+      ...root.getChildren()
+        .filter(node => !ts.isClassDeclaration(node))
+        .filter(node => !ts.isImportDeclaration(node)),
     ]
-      .map(segment => printer.printNode(ts.EmitHint.Unspecified, segment, clientFile))
+      .map(segment => printer.printNode(ts.EmitHint.Unspecified, segment, blank))
       .join('\n');
   }
 
-  private createClient() {
+  private updateClient(c: ts.ClassDeclaration): ts.ClassDeclaration {
+    const apiVersionPropertyFilter = (member: ts.Node) => ts.isPropertyDeclaration(member)
+      && (<ts.Identifier>(<ts.PropertyDeclaration>member).name).escapedText === 'apiVersion';
+    let apiVersionProperty: ts.PropertyDeclaration | undefined = c.members.find(member => apiVersionPropertyFilter(member)) as ts.PropertyDeclaration;
+    if (!apiVersionProperty) {
+      throw new Error('Skeleton client must provide "apiVersion" property!')
+    }
 
-    const c = ts.createClassDeclaration(
-      undefined,
-      [ts.createToken(ts.SyntaxKind.ExportKeyword)],
-      'Client',
-      undefined,
-      [],
+    apiVersionProperty = ts.updateProperty(
+      apiVersionProperty,
+      apiVersionProperty.decorators,
+      apiVersionProperty.modifiers,
+      apiVersionProperty.name,
+      apiVersionProperty.questionToken,
+      apiVersionProperty.type,
+      ts.createLiteral(this.api.info.version)
+    )
+
+    c = ts.updateClassDeclaration(
+      c,
+      c.decorators,
+      c.modifiers,
+      c.name,
+      c.typeParameters,
+      c.heritageClauses ? c.heritageClauses : [],
       [
-        ts.createProperty(
-          undefined,
-          [
-            ts.createToken(ts.SyntaxKind.StaticKeyword),
-          ],
-          'apiVersion',
-          undefined,
-          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-          ts.createLiteral(this.api.info.version),
-        ),
-        ts.createProperty(
-          undefined,
-          [
-            ts.createToken(ts.SyntaxKind.PrivateKeyword),
-          ],
-          'token',
-          undefined,
-          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-          undefined,
-        ),
-        ts.createProperty(
-          undefined,
-          [
-            ts.createToken(ts.SyntaxKind.PrivateKeyword),
-          ],
-          'endpoint',
-          undefined,
-          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-          undefined,
-        ),
-        this.createConstructor(),
-        this.createRequest(),
+        apiVersionProperty,
+        ...c.members.filter(member => !apiVersionPropertyFilter(member) && ts.isPropertyDeclaration(member)),
+        this.createClientConstructor(),
+        ...c.members.filter(member => !apiVersionPropertyFilter(member) && !ts.isPropertyDeclaration(member)),
         ...this.createClientMethods(),
       ],
     );
 
-    ts.addSyntheticLeadingComment(c, ts.SyntaxKind.MultiLineCommentTrivia, '*\n' +
+    c = ts.addSyntheticLeadingComment(c, ts.SyntaxKind.MultiLineCommentTrivia, '*\n' +
       ' * API Client for the nRF Cloud REST API\n' +
       ' * \n' +
       ` * This client has been auto-generated for version ${this.api.info.version} of the API definition.\n` +
@@ -183,9 +169,7 @@ export class ClientGenerator {
       ` * @author ${this.packageJson.author}\n` +
       ' ', true);
 
-    return [
-      c,
-    ];
+    return c;
   }
 
   private createClientMethods(): ts.MethodDeclaration[] {
@@ -240,7 +224,6 @@ export class ClientGenerator {
 
     return method;
   }
-
 
   private createClientMethodBody(path: string, method: string, parameters: ApiParameter[], responses: ApiResponses): ts.Block {
 
@@ -351,7 +334,7 @@ export class ClientGenerator {
     }
   }
 
-  private createConstructor() {
+  private createClientConstructor() {
     const constructor = ts.createMethod(
       undefined,
       undefined,
@@ -405,374 +388,6 @@ export class ClientGenerator {
       ' ', true);
 
     return constructor;
-  }
-
-  private createRequest() {
-    return ts.createMethod(
-      undefined,
-      [
-        ts.createToken(ts.SyntaxKind.PrivateKeyword),
-        ts.createToken(ts.SyntaxKind.AsyncKeyword),
-      ],
-      undefined,
-      'request',
-      undefined,
-      undefined,
-      [
-        ts.createParameter(
-          undefined,
-          undefined,
-          undefined,
-          'method',
-          undefined,
-          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-        ),
-        ts.createParameter(
-          undefined,
-          undefined,
-          undefined,
-          'path',
-          undefined,
-          ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-        ),
-        ts.createParameter(
-          undefined,
-          undefined,
-          undefined,
-          'queryString',
-          undefined,
-          createStringMapType(true),
-          ts.createObjectLiteral(),
-        ),
-        ts.createParameter(
-          undefined,
-          undefined,
-          undefined,
-          'body',
-          ts.createToken(ts.SyntaxKind.QuestionToken),
-          ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-        ),
-        ts.createParameter(
-          undefined,
-          undefined,
-          undefined,
-          'headers',
-          undefined,
-          createStringMapType(),
-          ts.createObjectLiteral(
-            [
-              ts.createPropertyAssignment(
-                ts.createLiteral('Accept'),
-                ts.createLiteral('application/json'),
-              ),
-            ],
-          ),
-        ),
-      ],
-      ts.createTypeReferenceNode('Promise', [
-        ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-      ]),
-      ts.createBlock([
-          ts.createVariableStatement(
-            [],
-            ts.createVariableDeclarationList(
-              [
-                ts.createVariableDeclaration(
-                  'res',
-                  ts.createTypeReferenceNode('Response', undefined),
-                  ts.createAwait(
-                    ts.createCall(
-                      ts.createIdentifier('fetch'),
-                      undefined,
-                      [
-                        ts.createTemplateExpression(
-                          ts.createTemplateHead(''),
-                          [
-                            ts.createTemplateSpan(
-                              ts.createPropertyAccess(
-                                ts.createThis(),
-                                ts.createIdentifier('endpoint'),
-                              ),
-                              ts.createTemplateMiddle('/'),
-                            ),
-                            ts.createTemplateSpan(
-                              ts.createIdentifier('path'),
-                              ts.createTemplateMiddle(''),
-                            ),
-                            ts.createTemplateSpan(
-                              ts.createCall(
-                                ts.createIdentifier('toQueryString'),
-                                undefined,
-                                [
-                                  ts.createIdentifier('queryString'),
-                                ],
-                              ),
-                              ts.createTemplateTail(''),
-                            ),
-                          ],
-                        ),
-                        ts.createObjectLiteral(
-                          [
-                            ts.createShorthandPropertyAssignment('method'),
-                            ts.createPropertyAssignment('headers', ts.createObjectLiteral(
-                              [
-                                ts.createSpreadAssignment(ts.createIdentifier('headers')),
-                                ts.createPropertyAssignment(
-                                  'Authorization',
-                                  ts.createTemplateExpression(
-                                    ts.createTemplateHead('Bearer '),
-                                    [
-                                      ts.createTemplateSpan(
-                                        ts.createPropertyAccess(
-                                          ts.createThis(),
-                                          ts.createIdentifier('token'),
-                                        ),
-                                        ts.createTemplateTail(''),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ts.createPropertyAssignment(
-                                  ts.createLiteral('X-nRFCloud-API-Version'),
-                                  ts.createPropertyAccess(
-                                    ts.createIdentifier('Client'),
-                                    ts.createIdentifier('apiVersion'),
-                                  ),
-                                ),
-                                ts.createPropertyAssignment(
-                                  ts.createLiteral('X-nRFCloud-API-Client'),
-                                  ts.createLiteral(this.packageJson.name),
-                                ),
-                              ],
-                              true,
-                            )),
-                            ts.createPropertyAssignment(
-                              'body',
-                              ts.createConditional(
-                                ts.createIdentifier('body'),
-                                ts.createCall(
-                                  ts.createPropertyAccess(
-                                    ts.createIdentifier('JSON'),
-                                    ts.createIdentifier('stringify'),
-                                  ),
-                                  undefined,
-                                  [
-                                    ts.createIdentifier('body'),
-                                  ],
-                                ),
-                                ts.createIdentifier('undefined'),
-                              ),
-                            ),
-                          ],
-                          true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              ts.NodeFlags.Const,
-            ),
-          ),
-          // Check if we have json
-          ts.createVariableStatement(
-            [],
-            ts.createVariableDeclarationList(
-              [
-                ts.createVariableDeclaration('contentType', ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                  ts.createLogicalOr(
-                    ts.createCall(
-                      ts.createPropertyAccess(
-                        ts.createIdentifier('res.headers'),
-                        ts.createIdentifier('get'),
-                      ),
-                      undefined,
-                      [
-                        ts.createLiteral('content-type'),
-                      ],
-                    ),
-                    ts.createLiteral(''),
-                  ),
-                ),
-                ts.createVariableDeclaration('mediaType', ts.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-                  ts.createElementAccess(
-                    ts.createCall(
-                      ts.createPropertyAccess(
-                        ts.createIdentifier('contentType'),
-                        ts.createIdentifier('split'),
-                      ),
-                      undefined,
-                      [
-                        ts.createLiteral(';'),
-                      ],
-                    ),
-                    0,
-                  ),
-                ),
-              ],
-              ts.NodeFlags.Const,
-            ),
-          ),
-          // Throw if content type does not match accept
-          ts.createIf(
-            ts.createBinary(
-              ts.createCall(
-                ts.createPropertyAccess(
-                  ts.createIdentifier('headers.Accept'),
-                  ts.createIdentifier('indexOf'),
-                ),
-                undefined,
-                [
-                  ts.createIdentifier('mediaType'),
-                ],
-              ),
-              ts.SyntaxKind.LessThanToken,
-              ts.createLiteral(0),
-            ),
-            ts.createThrow(
-              ts.createNew(
-                ts.createIdentifier('TypeError'),
-                undefined,
-                [
-                  ts.createTemplateExpression(
-                    ts.createTemplateHead('The content-type "'),
-                    [
-                      ts.createTemplateSpan(
-                        ts.createIdentifier('contentType'),
-                        ts.createTemplateMiddle('" of the response does not match accepted media-type '),
-                      ),
-                      ts.createTemplateSpan(
-                        ts.createPropertyAccess(
-                          ts.createIdentifier('headers'),
-                          ts.createIdentifier('Accept'),
-                        ),
-                        ts.createTemplateTail(''),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Response is JSON?
-          ts.createIf(
-            ts.createBinary(
-              ts.createCall(
-                ts.createPropertyAccess(
-                  ts.createIdentifier('/^application\\/([^ \\/]+\\+)?json$/'),
-                  ts.createIdentifier('test'),
-                ),
-                undefined,
-                [
-                  ts.createIdentifier('mediaType'),
-                ],
-              ),
-              ts.SyntaxKind.EqualsEqualsEqualsToken,
-              ts.createFalse(),
-            ),
-            ts.createThrow(
-              ts.createNew(
-                ts.createIdentifier('TypeError'),
-                undefined,
-                [
-                  ts.createTemplateExpression(
-                    ts.createTemplateHead('The content-type "'),
-                    [
-                      ts.createTemplateSpan(
-                        ts.createIdentifier('contentType'),
-                        ts.createTemplateTail('" of the response is not JSON!'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // res.json()
-          ts.createVariableStatement(
-            [],
-            ts.createVariableDeclarationList(
-              [
-                ts.createVariableDeclaration('json', ts.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-                  ts.createAwait(
-                    ts.createCall(
-                      ts.createPropertyAccess(
-                        ts.createIdentifier('res'),
-                        ts.createIdentifier('json'),
-                      ),
-                      undefined,
-                      [],
-                    ),
-                  ),
-                ),
-              ],
-              ts.NodeFlags.Const,
-            ),
-          ),
-          // Throw as HttpProblem if statusCode >= 400, backend is expected to return this
-          ts.createIf(
-            ts.createBinary(
-              ts.createPropertyAccess(
-                ts.createIdentifier('res'),
-                ts.createIdentifier('status'),
-              ),
-              ts.SyntaxKind.GreaterThanEqualsToken,
-              ts.createLiteral(400),
-            ),
-            // Response is HttpProblem?
-            ts.createIf(
-              ts.createBinary(
-                ts.createPropertyAccess(
-                  ts.createIdentifier('json'),
-                  ts.createIdentifier('$context'),
-                ),
-                ts.SyntaxKind.EqualsEqualsEqualsToken,
-                ts.createCall(
-                  ts.createPropertyAccess(
-                    ts.createIdentifier('HttpProblem.$context'),
-                    ts.createIdentifier('toString'),
-                  ),
-                  undefined,
-                  [],
-                ),
-              ),
-              ts.createThrow(
-                ts.createCall(
-                  ts.createPropertyAccess(
-                    ts.createIdentifier('HttpProblem'),
-                    ts.createIdentifier('fromJSON'),
-                  ),
-                  undefined,
-                  [
-                    ts.createIdentifier('json'),
-                  ],
-                ),
-              ),
-              ts.createThrow(
-                ts.createNew(
-                  ts.createIdentifier('ApplicationError'),
-                  undefined,
-                  [
-                    ts.createCall(
-                      ts.createPropertyAccess(
-                        ts.createIdentifier('JSON'),
-                        ts.createIdentifier('stringify'),
-                      ),
-                      undefined,
-                      [
-                        ts.createIdentifier('json'),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          ts.createReturn(ts.createIdentifier('json')),
-        ],
-        true,
-      ),
-    );
   }
 }
 
