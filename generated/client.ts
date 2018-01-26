@@ -50,6 +50,9 @@ export class Client {
      * - for status 200
      *   a TenantsList as application/json
      *   (The tenants for the authenticated user)
+     * - for status 201
+     *   a TenantsList as application/json
+     *   (A list with the the tenant which was just created.)
      * - for status 400
      *   a HttpProblem as application/json
      *   (The supplied request data was invalid. Check the response body for details.)
