@@ -36,13 +36,21 @@ export class Client {
       throw new TypeError(`The content-type "${contentType}" of the response does not match accepted media-type ${headers.Accept}`);
     if (/^application\/([^ \/]+\+)?json$/.test(mediaType) === false)
       throw new TypeError(`The content-type "${contentType}" of the response is not JSON!`);
-    const json: any = await res.json();
-    if (res.status >= 400)
-      if (json.$context === HttpProblem.$context.toString())
-        throw HttpProblem.fromJSON(json);
-      else
-        throw new ApplicationError(JSON.stringify(json));
-    return json;
+
+    const status: number = res.status;
+    const contentLength: number = +(res.headers.get('content-length') || 0);
+
+    if (status >= 400) {
+      if (contentLength) {
+        const json: any = await res.json();
+        if (json.$context === HttpProblem.$context.toString())
+          throw HttpProblem.fromJSON(json);
+        else
+          throw new ApplicationError(JSON.stringify(json));
+      }
+      throw new ApplicationError(`Response status code was ${status}, but not response was returned.`);
+    }
+    if (contentLength) return await res.json();
   }
 }
 
