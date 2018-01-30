@@ -18,8 +18,12 @@ Provides the JavaScript API client for the [nRFCloud.com REST API](https://githu
 
 The API client is available on npm:
 
-    npm i @nrfcloud/api-client-javascript
+    npm i @nrfcloud/api-client-javascript@preview
+    
+You also need to install the [updated models](https://github.com/nRFCloud/models).
 
+    npm i @nrfcloud/models@next
+    
 ### Browser
 
 ```javascript
@@ -38,10 +42,42 @@ client
     npm i isomorphic-fetch es6-promise
 
 ```javascript
-require('es6-promise').polyfill();
-require('isomorphic-fetch');
+require('es6-promise').polyfill()
+require('isomorphic-fetch')
 
 const {Client} = require('@nrfcloud/api-client-javascript')
 
 ...
+```
+
+## Testing with the API client
+
+A testing API Gateway can provide an `/token` endpoint which returns a
+Cognito User Pool Identity Token so it is not required to use the AWS
+Cognito SDK.
+
+Example:
+
+```javascript
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
+const { Client } = require('@nrfcloud/api-client-javascript');
+
+const endpoint = 'https://mfzzp79oa7.execute-api.us-east-1.amazonaws.com/dev';
+const username = 'alex@example.com';
+const password = 'changeme';
+
+(async () => {
+  const res = await fetch(`${endpoint}/token`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password })
+  });
+  const { token } = await res.json();
+  const client = new Client(token, endpoint);
+  client
+    .listTenants('true')
+    .then(res => {
+      console.log(res)
+    })
+})();
 ```
