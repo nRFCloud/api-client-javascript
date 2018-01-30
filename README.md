@@ -58,26 +58,36 @@ Cognito SDK.
 
 Example:
 
+    npm i @nrfcloud/api-client-javascript@preview @nrfcloud/models@next isomorphic-fetch es6-promise
+
 ```javascript
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 const { Client } = require('@nrfcloud/api-client-javascript');
 
-const endpoint = 'https://mfzzp79oa7.execute-api.us-east-1.amazonaws.com/dev';
-const username = 'alex@example.com';
+const endpoint = 'https://1ewo2b2jmj.execute-api.us-east-1.amazonaws.com/dev';
+const username = 'changeme'; // nrfcloud.com email
 const password = 'changeme';
 
 (async () => {
-  const res = await fetch(`${endpoint}/token`, {
-    method: 'POST',
-    body: JSON.stringify({ username, password })
-  });
-  const { token } = await res.json();
-  const client = new Client(token, endpoint);
-  client
-    .listTenants('true')
-    .then(res => {
-      console.log(res)
-    })
+
+   // This is an undocumented endpoint, which will only be on dev / test stages
+   const res = await fetch(`${endpoint}/token`, {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+   });
+   const { token } = await res.json();
+
+   // Construct a client
+   const client = new Client(token, endpoint);
+   client
+      .listTenants('true')
+      .then(([{ id }]) => client.registerGateway(id))
+      .then(res => {
+         console.log(res)
+      })
+      .catch(err => {
+         console.error(err)
+      })
 })();
 ```
