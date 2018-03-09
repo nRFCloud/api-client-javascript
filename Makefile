@@ -3,7 +3,7 @@
 generated: generated/types generated/client.ts generated/index.ts generated/README.md
 	./node_modules/.bin/tsc
 
-generated/client.ts: generator/generate-client.js node_modules/@nrfcloud/api/docs/api.json
+generated/client.ts: generator/generate-client.js
 	node generator/generate-client.js $@
 
 generated/index.ts:

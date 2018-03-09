@@ -17,7 +17,7 @@ export class Client {
      * @param {string} token AWS Cognito Identity token
      * @param {string} endpoint API endpoint
      */
-    constructor(token: string, endpoint: string = "https://hnmr2uba55.execute-api.us-east-1.amazonaws.com/prod") {
+    constructor(token: string, endpoint: string = "https://hnmr2uba55.execute-api.us-east-1.amazonaws.com/dev") {
         this.token = token;
         this.endpoint = endpoint;
     }
@@ -32,13 +32,20 @@ export class Client {
             throw new TypeError(`The content-type "${contentType}" of the response does not match accepted media-type ${headers.Accept}`);
         if (/^application\/([^ \/]+\+)?json$/.test(mediaType) === false)
             throw new TypeError(`The content-type "${contentType}" of the response is not JSON!`);
-        const json: any = await res.json();
-        if (res.status >= 400)
-            if (json.$context === HttpProblem.$context.toString())
-                throw HttpProblem.fromJSON(json);
-            else
-                throw new ApplicationError(JSON.stringify(json));
-        return json;
+        const status: number = res.status;
+        const contentLength: number = +(res.headers.get("content-length") || 0);
+        if (status >= 400) {
+            if (contentLength) {
+                const json: any = await res.json();
+                if (json.$context === HttpProblem.$context.toString())
+                    throw HttpProblem.fromJSON(json);
+                else
+                    throw new ApplicationError(JSON.stringify(json));
+            }
+            throw new ApplicationError(`Response status code was ${status}, but not response was returned.`);
+        }
+        if (contentLength)
+            return await res.json();
     }
     /**
      * Fetch user's tenant
@@ -110,8 +117,8 @@ export type Headers = {
     [index: string]: string;
 };
 export const toQueryString = (obj: {
-        [index: string]: string | undefined;
-    }): string => Object.keys(obj).filter(key => obj[key]).reduce((queryString, key, i) => {
+    [index: string]: string | undefined;
+}): string => Object.keys(obj).filter(key => obj[key]).reduce((queryString, key, i) => {
     let delimiter, value;
     delimiter = (i === 0) ? "?" : "&";
     key = encodeURIComponent(key);
