@@ -9,9 +9,7 @@
     "test": "jest",
     "test:coverage": "npm run test -- --coverage && codeclimate-test-reporter < ./coverage/lcov.info",
     "commitmsg": "commitlint -e",
-    "lint": "tslint --project ./tsconfig.json -e generated/**/*",
-    "travis-deploy-once": "travis-deploy-once",
-    "semantic-release": "semantic-release"
+    "lint": "tslint --project ./tsconfig.json -e generated/**/*"
   },
   "repository": {
     "type": "git",
@@ -38,8 +36,6 @@
     "husky": "^0.14.3",
     "jest": "^22.4.2",
     "json-schema-to-typescript": "^5.3.3",
-    "semantic-release": "^15.0.2",
-    "travis-deploy-once": "^4.4.0",
     "ts-jest": "^22.4.1",
     "tslint": "^5.9.1",
     "typescript": "^2.7.2"
