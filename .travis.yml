@@ -16,7 +16,7 @@ script:
   - npm run lint
   - npm run test:coverage
 after_success:
-  - npm run travis-deploy-once "npm run semantic-release"
+  - npx travis-deploy-once "npx semantic-release"
 branches:
   except:
     - /^v\d+\.\d+\.\d+$/
